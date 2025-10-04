@@ -68,15 +68,12 @@ class MyPlugin(Star):
                 return
                 
             # 直接使用配置文件路径（使用绝对路径避免工作目录问题）
-            import os
-            config_path = os.path.join(os.path.dirname(__file__), "option.yml")
                 
-            option = jmcomic.create_option_by_file(config_path)
+            option = jmcomic.create_option_by_file("option.yml")
             jmcomic.download_albums(message_str, option)
             
             # 确保download目录存在并包含图片
-            download_path = os.path.join(os.path.dirname(__file__), "download")
-            images = find_images_os(download_path)
+            images = find_images_os("download")
             if not images:
                 yield event.plain_result("未找到下载的图片")
                 return
