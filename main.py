@@ -36,6 +36,21 @@ def extract_integers(text):
     matches = re.findall(pattern, text)
     return [str(match) for match in matches]
 
+def clear_download_folder(folder_path):
+    """
+    清空下载文件夹中的所有文件
+    """
+    if not os.path.exists(folder_path):
+        return
+        
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.error(f"删除文件 {file_path} 失败: {e}")
+
 @register("jm", "iamfromchangsha", "一个简单的插件", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
@@ -59,6 +74,10 @@ class MyPlugin(Star):
         for i, img in enumerate(images, 1):
             yield event.image_result(img)
             time.sleep(1)
+        
+        # 发送完图片后清空下载文件夹
+        clear_download_folder("./data/plugins/astrbot_plugin_jmcomic/download")
+        yield event.plain_result("图片发送完成，已清空下载文件夹。")
             
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
