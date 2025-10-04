@@ -1,0 +1,18 @@
+download:
+  image:
+    suffix: .png # 该配置用于把下载的图片转为png格式
+  threading:
+    image: 5
+    photo: 2
+
+plugins: # 插件配置项
+  after_init: # 在after_init事件时自动执行插件
+    - plugin: login # 插件的key
+      kwargs: # 下面是给插件的参数 (kwargs)，由插件类自定义
+        username: jmzhuanyonghao # 禁漫帐号
+        password: jmzhuanyonghao # 密码
+dir_rule:
+  # base_dir: 根目录。
+  # 此配置也支持引用环境变量，例如
+  # base_dir: ${JM_DIR}/下载文件夹/
+  base_dir: ./download # 根目录
