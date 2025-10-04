@@ -37,7 +37,7 @@ def extract_integers(text):
     matches = re.findall(pattern, text)
     return [str(match) for match in matches]
 
-@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
+@register("jm", "iamfromchangsha", "一个简单的插件", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -49,7 +49,7 @@ class MyPlugin(Star):
     
     # 注册指令的装饰器。指令名为 jm。注册成功后，发送 `/jm` 就会触发这个指令
     @filter.command("jm")
-    async def helloworld(self, event: AstrMessageEvent):
+    async def jm(self, event: AstrMessageEvent):
         # 检查jmcomic是否可用
         if not JMCOMIC_AVAILABLE:
             yield event.plain_result("错误：jmcomic模块未安装，无法使用此功能")
