@@ -67,16 +67,19 @@ class MyPlugin(Star):
                 yield event.plain_result("错误：未能从消息中提取到有效的数字ID")
                 return
                 
-            # 检查配置文件是否存在
-            if not os.path.exists("option.yml"):
+            # 检查配置文件是否存在（使用绝对路径避免工作目录问题）
+            import os
+            config_path = os.path.join(os.path.dirname(__file__), "option.yml")
+            if not os.path.exists(config_path):
                 yield event.plain_result("错误：未找到option.yml配置文件")
                 return
                 
-            option = jmcomic.create_option_by_file("option.yml")
+            option = jmcomic.create_option_by_file(config_path)
             jmcomic.download_albums(message_str, option)
             
             # 确保download目录存在并包含图片
-            images = find_images_os("./download")
+            download_path = os.path.join(os.path.dirname(__file__), "download")
+            images = find_images_os(download_path)
             if not images:
                 yield event.plain_result("未找到下载的图片")
                 return
