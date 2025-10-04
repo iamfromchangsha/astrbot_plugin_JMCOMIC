@@ -1,9 +1,31 @@
-# helloworld
+# JMComic 下载插件文档
 
-AstrBot 插件模板
+## 插件信息
 
-A template plugin for AstrBot plugin feature
+- **插件名称**：jm  
+- **作者**：iamfromchangsha  
+- **版本**：1.0.0  
+- **简介**：一个基于 `jmcomic` 库的 AstrBot 插件，用于通过漫画 ID 自动下载并发送图片。
 
-# 支持
+---
 
-[帮助文档](https://astrbot.app)
+## 功能说明
+
+该插件允许用户通过发送 `/jm <ID>` 指令，从指定的漫画平台（如禁漫天堂）下载对应 ID 的漫画专辑，并将下载的图片逐张发送回聊天窗口。
+
+### 支持特性
+
+- 从用户消息中自动提取整数 ID（支持多个 ID）
+- 使用 `option.yml` 配置文件进行 `jmcomic` 的认证与设置
+- 自动遍历 `./download` 目录，识别并发送所有图片文件（支持 `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.webp`）
+- 错误处理与用户友好提示
+- 发送图片时自动间隔 1 秒，防止消息刷屏
+
+---
+
+## 安装依赖
+
+确保已安装 `jmcomic`：
+
+```bash
+pip install jmcomic
