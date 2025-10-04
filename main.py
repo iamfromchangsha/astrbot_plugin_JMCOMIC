@@ -68,11 +68,7 @@ class MyPlugin(Star):
                 return
                 
             # 检查配置文件是否存在（使用绝对路径避免工作目录问题）
-            import os
-            config_path = os.path.join(os.path.dirname(__file__), "option.yml")
-            if not os.path.exists(config_path):
-                yield event.plain_result("错误：未找到option.yml配置文件")
-                return
+
                 
             option = jmcomic.create_option_by_file(config_path)
             jmcomic.download_albums(message_str, option)
