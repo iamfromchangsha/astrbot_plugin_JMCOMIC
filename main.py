@@ -18,11 +18,24 @@ def find_images_os(folder_path, extensions=None):
             if os.path.splitext(file)[1].lower() in extensions:
                 full_path = os.path.join(root, file)
                 image_files.append(full_path)
+    
+    # 按文件名中的数字排序
+    def extract_number(filename):
+        # 提取文件名中的数字部分
+        basename = os.path.basename(filename)
+        numbers = re.findall(r'\d+', basename)
+        if numbers:
+            return int(numbers[0])  # 返回第一个数字
+        return 0  # 如果没有找到数字，则返回0
+    
+    image_files.sort(key=extract_number)
     return image_files
+
 def extract_integers(text):
     pattern = r'-?\b\d+\b'
     matches = re.findall(pattern, text)
     return [str(match) for match in matches]
+
 @register("jm", "iamfromchangsha", "一个简单的插件", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
@@ -42,8 +55,10 @@ class MyPlugin(Star):
         option = jmcomic.create_option_by_file("./data/plugins/astrbot_plugin_jmcomic/option.yml")
         jmcomic.download_album(message_str, option)
         images = find_images_os("./data/plugins/astrbot_plugin_jmcomic/download")
-        for img in  images:
+        yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
+        for i, img in enumerate(images, 1):
             yield event.image_result(img)
             time.sleep(1)
+            
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
