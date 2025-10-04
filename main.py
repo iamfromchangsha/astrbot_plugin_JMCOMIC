@@ -49,6 +49,7 @@ class MyPlugin(Star):
         if not JMCOMIC_AVAILABLE:
             logger.error("jmcomic模块不可用，插件功能受限")
     
+
     @filter.command("jm")
     async def jm(self, event: AstrMessageEvent):
         if not JMCOMIC_AVAILABLE:
@@ -65,8 +66,10 @@ class MyPlugin(Star):
             if not ids:
                 yield event.plain_result("错误：未能从消息中提取到有效的数字ID")
                 return
-
             option_path = pathlib.Path(__file__).parent.resolve() / "option.yml"
+            logger.info(f"正在查找配置文件: {option_path}")
+            logger.info(f"当前插件文件位置: {__file__}")
+
             if not option_path.exists():
                 yield event.plain_result(f"错误：配置文件不存在: {option_path}")
                 return
