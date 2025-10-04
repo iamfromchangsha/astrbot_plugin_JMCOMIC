@@ -15,4 +15,4 @@ dir_rule:
   # base_dir: 根目录。
   # 此配置也支持引用环境变量，例如
   # base_dir: ${JM_DIR}/下载文件夹/
-  base_dir: ./download # 根目录
+  base_dir: ./data/plugins/astrbot_plugin_JMCOMIC/download # 根目录
