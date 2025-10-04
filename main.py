@@ -39,9 +39,9 @@ class MyPlugin(Star):
         logger.info(message_chain)
         yield event.plain_result(f"{user_name}, 正在查找 {message_str}!") # 发送一条纯文本消息
         message_str = extract_integers(message_str)
-        option = jmcomic.create_option_by_file("option.yml")
+        option = jmcomic.create_option_by_file("./data/plugins/astrbot_plugin_jmcomic/option.yml")
         jmcomic.download_albums(message_str, option)
-        images = find_images_os("./data/plugins/astrbot_plugin_JMCOMIC/download")
+        images = find_images_os("./data/plugins/astrbot_plugin_jmcomic/download")
         for img in  images:
             yield event.image_result(img)
             time.sleep(1)
