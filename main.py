@@ -69,11 +69,11 @@ class MyPlugin(Star):
                 
             # 直接使用配置文件路径（使用绝对路径避免工作目录问题）
                 
-            option = jmcomic.create_option_by_file("option.yml")
+            option = jmcomic.create_option_by_file("/opt/AstrBot/data/plugins/astrbot_plugin_jmcomic/option.yml")
             jmcomic.download_albums(message_str, option)
             
             # 确保download目录存在并包含图片
-            images = find_images_os("download")
+            images = find_images_os("/opt/AstrBot/data/plugins/astrbot_plugin_jmcomic/download")
             if not images:
                 yield event.plain_result("未找到下载的图片")
                 return
