@@ -6,6 +6,7 @@ import jmcomic
 import re
 import os
 import time
+import shutil
 
 def find_images_os(folder_path, extensions=None):
     if extensions is None:
@@ -36,20 +37,23 @@ def extract_integers(text):
     matches = re.findall(pattern, text)
     return [str(match) for match in matches]
 
-def clear_download_folder(folder_path):
-    """
-    清空下载文件夹中的所有文件
-    """
+def clear_folder(folder_path):
     if not os.path.exists(folder_path):
+        print(f"警告: 路径不存在 - {folder_path}")
         return
-        
-    for root, dirs, files in os.walk(folder_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                logger.error(f"删除文件 {file_path} 失败: {e}")
+
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"提供的路径不是文件夹: {folder_path}")
+
+    for item in os.listdir(folder_path):
+        item_path = os.path.join(folder_path, item)
+        try:
+            if os.path.isfile(item_path) or os.path.islink(item_path):
+                os.unlink(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+        except Exception as e:
+            print(f"无法删除 {item_path}: {e}")
 
 @register("jm", "iamfromchangsha", "一个简单的插件", "1.0.0")
 class MyPlugin(Star):
@@ -63,7 +67,7 @@ class MyPlugin(Star):
     async def helloworld(self, event: AstrMessageEvent):
         user_name = event.get_sender_name()
         message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
+        message_chain = event.get_messages() # 用户所发的消息的消息链
         logger.info(message_chain)
         yield event.plain_result(f"{user_name}, 正在查找 {message_str}!") # 发送一条纯文本消息
         message_str = extract_integers(message_str)
@@ -71,13 +75,12 @@ class MyPlugin(Star):
         jmcomic.download_album(message_str, option)
         images = find_images_os("./data/plugins/astrbot_plugin_jmcomic/download")
         yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
-        for i, img in enumerate(images, 1):
-            yield event.image_result(img)
-            time.sleep(1)
         
-        # 发送完图片后清空下载文件夹
-        clear_download_folder("./data/plugins/astrbot_plugin_jmcomic/download")
-        yield event.plain_result("图片发送完成，已清空下载文件夹。")
+        for i, img in enumerate(images, 1):
+            yield event.image_result(img)  # 发送图片
+            time.sleep(1) 
+        clear_folder("./data/plugins/astrbot_plugin_jmcomic/download")
+
             
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
