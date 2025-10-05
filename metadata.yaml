@@ -1,5 +1,5 @@
 name: astrbot_plugin_JMCOMIC # 这是你的插件的唯一识别名。
-desc: 从JM下载图片，它会将这些图片逐一发送给用户。 # 插件简短描述
+desc: 适用于 AstrBot 的禁漫天堂（JMComic）插件，支持通过指令搜索和下载漫画。
 version: v1.0 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: iamfromchangsha # 作者
 repo: https://github.com/iamfromchangsha/astrbot_plugin_JMCOMIC # 插件的仓库地址
