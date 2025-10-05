@@ -3,11 +3,27 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
 import jmcomic
+from jmcomic import *
 import re
 import os
 import time
 import shutil
+import asyncio
+import logging
+logger = logging.getLogger("jmcomic_plugin")
 
+def extract_numbers(text):
+    # 正则表达式匹配整数、浮点数、负数
+    pattern = r'-?\d+\.?\d*'
+    matches = re.findall(pattern, text)
+    # 转换为数字类型（int 或 float）
+    numbers = []
+    for match in matches:
+        if '.' in match:
+            numbers.append(float(match))
+        else:
+            numbers.append(int(match))
+    return numbers
 def find_images_os(folder_path, extensions=None):
     if extensions is None:
         extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'}
@@ -78,9 +94,24 @@ class MyPlugin(Star):
         
         for i, img in enumerate(images, 1):
             yield event.image_result(img)  # 发送图片
-            time.sleep(1) 
+            await asyncio.sleep(1)
+
         clear_folder("./data/plugins/astrbot_plugin_jmcomic/download")
 
+    @filter.command("jms")
+    async def helloworld2(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        message_str = event.message_str
+        logger.info(f"Received command from {user_name}: {message_str}")
+        pages = int(extract_numbers(message_str)[0]) if extract_numbers(message_str) else 1
+        message_str = re.sub(r'\d', '', message_str)
+        yield event.plain_result(f"{user_name}, {message_str}这种题材实在是太涩啦!页面：{pages}")
+        client = JmOption.default().new_jm_client()
+        page: JmSearchPage = client.search_site(search_query=message_str, page=pages)
+        result = ""
+        for album_id, title in page:
+            result += f'[{album_id}]: {title}\n'
+        yield event.plain_result(result)
             
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
