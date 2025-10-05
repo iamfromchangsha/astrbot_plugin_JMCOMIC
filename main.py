@@ -133,7 +133,6 @@ class MyPlugin(Star):
         message_str = event.message_str
         pages = extract_numbers(message_str)
         message_str = re.sub(r'\d', '', message_str)
-        logger.warning(f"Received command from {user_name}: {message_str}")
         yield event.plain_result(f"{user_name}, {message_str}这种题材实在是太涩啦!页面：{pages}")
         client = JmOption.default().new_jm_client()
         page: JmSearchPage = client.search_site(search_query=message_str, page=pages)
