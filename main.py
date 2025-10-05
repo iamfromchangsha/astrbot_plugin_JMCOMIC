@@ -3,11 +3,26 @@ from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger
 import astrbot.api.message_components as Comp
 import jmcomic
+from jmcomic import *
 import re
 import os
 import asyncio
 import shutil
 from pathlib import Path
+
+
+def extract_numbers(text):
+    # 正则表达式匹配整数、浮点数、负数
+    pattern = r'-?\d+\.?\d*'
+    matches = re.findall(pattern, text)
+    # 转换为数字类型（int 或 float）
+    numbers = []
+    for match in matches:
+        if '.' in match:
+            numbers.append(float(match))
+        else:
+            numbers.append(int(match))
+    return numbers
 
 def find_images_os(folder_path: str, extensions=None):
     if extensions is None:
@@ -111,6 +126,21 @@ class MyPlugin(Star):
             await asyncio.sleep(1)  # 非阻塞等待
 
         clear_folder(str(download_dir))
+    
+    @filter.command("jms")
+    async def helloworld2(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        message_str = event.message_str
+        pages = extract_numbers(message_str)
+        message_str = re.sub(r'\d', '', message_str)
+        logger.info(f"Received command from {user_name}: {message_str}page: {pages}")
+        yield event.plain_result(f"{user_name}, {message_str}这种题材实在是太涩啦!页面：{pages}")
+        client = JmOption.default().new_jm_client()
+        page: JmSearchPage = client.search_site(search_query=message_str, page=pages)
+        result = ""
+        for album_id, title in page:
+            result += f'[{album_id}]: {title}\n'
+        yield event.plain_result(result)
 
     async def terminate(self):
         """插件销毁时清理资源"""
