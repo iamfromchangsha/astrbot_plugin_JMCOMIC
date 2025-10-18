@@ -71,6 +71,34 @@ def clear_folder(folder_path):
         except Exception as e:
             print(f"无法删除 {item_path}: {e}")
 
+def get_user_download_dir(user_id):
+    """
+    为每个用户生成独立的下载目录路径
+    """
+    base_dir = "./data/plugins/astrbot_plugin_jmcomic"
+    user_dir = os.path.join(base_dir, "download", user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    return user_dir
+
+def create_temp_option(option_file, user_download_dir):
+    """
+    创建临时配置文件，将下载目录指向用户的独立目录
+    """
+    import yaml
+    # 读取原始配置
+    with open(option_file, 'r', encoding='utf-8') as f:
+        option_data = yaml.safe_load(f)
+    
+    # 修改下载目录
+    option_data['dir_rule']['base_dir'] = user_download_dir
+    
+    # 创建临时配置文件
+    temp_option_file = os.path.join(user_download_dir, "temp_option.yml")
+    with open(temp_option_file, 'w', encoding='utf-8') as f:
+        yaml.dump(option_data, f, allow_unicode=True)
+    
+    return temp_option_file
+
 @register("jm", "iamfromchangsha", "一个简单的插件", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
@@ -82,21 +110,30 @@ class MyPlugin(Star):
     @filter.command("jm")
     async def helloworld(self, event: AstrMessageEvent):
         user_name = event.get_sender_name()
+        user_id = event.get_sender_id()  # 获取用户ID以区分不同用户
         message_str = event.message_str # 用户发的纯文本消息字符串
         message_chain = event.get_messages() # 用户所发的消息的消息链
         logger.info(message_chain)
         yield event.plain_result(f"{user_name}, 正在查找 {message_str}!") # 发送一条纯文本消息
         message_str = extract_integers(message_str)
-        option = jmcomic.create_option_by_file("./data/plugins/astrbot_plugin_jmcomic/option.yml")
+        
+        # 为每个用户创建独立的下载目录
+        user_download_dir = get_user_download_dir(user_id)
+        temp_option_file = create_temp_option(
+            "./data/plugins/astrbot_plugin_jmcomic/option.yml", 
+            user_download_dir
+        )
+        
+        option = jmcomic.create_option_by_file(temp_option_file)
         jmcomic.download_album(message_str, option)
-        images = find_images_os("./data/plugins/astrbot_plugin_jmcomic/download")
+        images = find_images_os(user_download_dir)
         yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
         
         for i, img in enumerate(images, 1):
             yield event.image_result(img)  # 发送图片
             await asyncio.sleep(1)
 
-        clear_folder("./data/plugins/astrbot_plugin_jmcomic/download")
+        clear_folder(user_download_dir)
 
     @filter.command("jms")
     async def helloworld2(self, event: AstrMessageEvent):
