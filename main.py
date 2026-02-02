@@ -10,7 +10,12 @@ import time
 import shutil
 import asyncio
 import logging
+import yaml  # 提前导入，避免函数内重复导入
+
 logger = logging.getLogger("jmcomic_plugin")
+
+# 全局暂停标识字典：key=用户ID，value=是否暂停（bool），实现多用户隔离
+JM_PAUSE_FLAG = {}
 
 def extract_numbers(text):
     # 正则表达式匹配整数、浮点数、负数
@@ -24,6 +29,7 @@ def extract_numbers(text):
         else:
             numbers.append(int(match))
     return numbers
+
 def find_images_os(folder_path, extensions=None):
     if extensions is None:
         extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'}
@@ -84,7 +90,6 @@ def create_temp_option(option_file, user_download_dir):
     """
     创建临时配置文件，将下载目录指向用户的独立目录
     """
-    import yaml
     # 读取原始配置
     with open(option_file, 'r', encoding='utf-8') as f:
         option_data = yaml.safe_load(f)
@@ -111,29 +116,63 @@ class MyPlugin(Star):
     async def helloworld(self, event: AstrMessageEvent):
         user_name = event.get_sender_name()
         user_id = event.get_sender_id()  # 获取用户ID以区分不同用户
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链
+        message_str = event.message_str.strip() # 去除首尾空格，避免匹配问题
+        message_chain = event.get_messages()
         logger.info(message_chain)
-        yield event.plain_result(f"{user_name}, 正在查找 {message_str}!") # 发送一条纯文本消息
+
+        # 1. 暂停指令判断：匹配/jm 暂停（忽略空格）
+        if re.match(r'^jm\s*暂停$', message_str, re.IGNORECASE):
+            JM_PAUSE_FLAG[user_id] = True  # 设置当前用户暂停标识为True
+            # 清除该用户下载目录并提示
+            user_download_dir = get_user_download_dir(user_id)
+            clear_folder(user_download_dir)
+            yield event.plain_result(f"{user_name}，已暂停漫画发送并清除服务器下载文件！")
+            return  # 直接返回，终止后续逻辑
+
+        # 2. 非暂停指令：重置当前用户的暂停标识为False（开始新的下载/发送）
+        JM_PAUSE_FLAG[user_id] = False
+        yield event.plain_result(f"{user_name}, 正在查找 {message_str}!")
         message_str = extract_integers(message_str)
         
         # 为每个用户创建独立的下载目录
         user_download_dir = get_user_download_dir(user_id)
-        temp_option_file = create_temp_option(
-            "./data/plugins/astrbot_plugin_jmcomic/option.yml", 
-            user_download_dir
-        )
-        
-        option = jmcomic.create_option_by_file(temp_option_file)
-        jmcomic.download_album(message_str, option)
-        images = find_images_os(user_download_dir)
-        yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
-        
-        for i, img in enumerate(images, 1):
-            yield event.image_result(img)  # 发送图片
-            await asyncio.sleep(1)
-
+        # 先清空目录，避免残留旧文件
         clear_folder(user_download_dir)
+        try:
+            temp_option_file = create_temp_option(
+                "./data/plugins/astrbot_plugin_jmcomic/option.yml", 
+                user_download_dir
+            )
+            
+            option = jmcomic.create_option_by_file(temp_option_file)
+            jmcomic.download_album(message_str, option)
+            images = find_images_os(user_download_dir)
+            
+            # 检查是否在下载后被暂停
+            if JM_PAUSE_FLAG.get(user_id, False):
+                clear_folder(user_download_dir)
+                yield event.plain_result(f"{user_name}，已触发暂停，取消图片发送并清除文件！")
+                return
+            
+            yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
+            
+            # 3. 图片发送循环：每次发送前检查暂停标识
+            for i, img in enumerate(images, 1):
+                # 暂停标识为True时，立即终止循环
+                if JM_PAUSE_FLAG.get(user_id, False):
+                    yield event.plain_result(f"{user_name}，已暂停图片发送，剩余{len(images)-i+1}张未发送！")
+                    break
+                yield event.image_result(img)  # 发送图片
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"用户{user_id}执行jm命令出错：{str(e)}")
+            yield event.plain_result(f"{user_name}，操作出错：{str(e)}")
+        finally:
+            # 4. 最终清理：无论是否暂停，结束后清空下载目录
+            clear_folder(user_download_dir)
+            # 重置暂停标识，避免影响下次操作
+            if user_id in JM_PAUSE_FLAG:
+                del JM_PAUSE_FLAG[user_id]
 
     @filter.command("jms")
     async def helloworld2(self, event: AstrMessageEvent):
@@ -152,3 +191,5 @@ class MyPlugin(Star):
             
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+        # 插件销毁时清空所有暂停标识
+        JM_PAUSE_FLAG.clear()
