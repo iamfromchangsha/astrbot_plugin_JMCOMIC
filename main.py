@@ -11,6 +11,11 @@ import shutil
 import asyncio
 import logging
 import yaml  # 提前导入，避免函数内重复导入
+import zipfile
+import random
+from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.dom.minidom import parseString
+
 
 logger = logging.getLogger("jmcomic_plugin")
 
@@ -85,6 +90,58 @@ def get_user_download_dir(user_id):
     user_dir = os.path.join(base_dir, "download", user_id)
     os.makedirs(user_dir, exist_ok=True)
     return user_dir
+
+def create_comic_info_xml(title="Default Title", author="Unknown", tags=None):
+    """
+    创建包含标签的ComicInfo.xml字符串
+    """
+    comicinfo = Element('ComicInfo')
+    title_elem = SubElement(comicinfo, 'Title')
+    title_elem.text = title
+    author_elem = SubElement(comicinfo, 'Writer')
+    author_elem.text = author
+    
+    if tags:
+        tags_elem = SubElement(comicinfo, 'Tags')  # 使用'Tags'元素来存储标签
+        tags_elem.text = ", ".join(tags)
+    
+    rough_string = tostring(comicinfo, 'utf-8')
+    reparsed = parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
+
+def add_comic_info_to_folder(folder_path, title="Default Title", author="Unknown", tags=None):
+    """
+    在指定漫画文件夹中添加ComicInfo.xml
+    """
+    xml_content = create_comic_info_xml(title=title, author=author, tags=tags)
+    with open(os.path.join(folder_path, 'ComicInfo.xml'), 'w', encoding='utf-8') as f:
+        f.write(xml_content)
+    print(f"Added ComicInfo.xml to {folder_path}")
+def make_cbz(folder_path, output_filename):
+    """
+    将漫画文件夹压缩为CBZ文件
+    """
+    with zipfile.ZipFile(output_filename, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                arcname = os.path.relpath(full_path, start=folder_path)
+                zf.write(full_path, arcname=arcname)
+    print(f"Created {output_filename}")
+
+def process_comics(main_folder,albumtags,albumauthor):
+    """
+    遍历主文件夹中的所有漫画文件夹，并为每个文件夹创建CBZ文件
+    """
+    for subdir in os.listdir(main_folder):
+        folder_path = os.path.join(main_folder, subdir)
+        if os.path.isdir(folder_path):
+            title = subdir  # 使用文件夹名称作为漫画标题
+            author = albumauthor
+            tags = albumtags  # 根据需要修改标签
+            
+            add_comic_info_to_folder(folder_path, title=title, author=author, tags=tags)
+            make_cbz(folder_path,  f"/opt/AstrBot/data/plugins_data/jmcomic/{subdir}.cbz")
 
 def create_temp_option(option_file, user_download_dir):
     """
@@ -164,10 +221,30 @@ class MyPlugin(Star):
                     break
                 yield event.image_result(img)  # 发送图片
                 await asyncio.sleep(1)
+
+
+            if JM_PAUSE_FLAG.get(user_id, False):
+                yield event.plain_result(f"{user_name}，未保存到komaga")
+            else:
+                # client = JmOption.default().new_jm_client()
+                subdir = os.listdir(user_download_dir)[0]  # 假设只有一个下载的漫画文件夹
+                for subdir in os.listdir(user_download_dir):
+                    folder_path = os.path.join(user_download_dir, subdir)
+                    if os.path.isdir(folder_path):
+                        title = subdir 
+             # 使用文件夹名称作为漫画标题
+                # page = client.search_site(search_query=str(message_str))
+                # album: JmAlbumDetail = page.single_album
+                yield event.plain_result(f"{user_name}，正在保存,{title}")
+                process_comics(user_download_dir,'None','None')
+
+                yield event.plain_result(f"{user_name}，已保存到komaga")
         except Exception as e:
             logger.error(f"用户{user_id}执行jm命令出错：{str(e)}")
             yield event.plain_result(f"{user_name}，操作出错：{str(e)}")
+
         finally:
+            
             # 4. 最终清理：无论是否暂停，结束后清空下载目录
             clear_folder(user_download_dir)
             # 重置暂停标识，避免影响下次操作
