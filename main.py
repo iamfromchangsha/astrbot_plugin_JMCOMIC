@@ -170,30 +170,37 @@ class MyPlugin(Star):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
     
     @filter.command("jm")
-    async def helloworld(self, event: AstrMessageEvent):
+    async def jm(self, event: AstrMessageEvent):
         user_name = event.get_sender_name()
-        user_id = event.get_sender_id()  # 获取用户ID以区分不同用户
-        message_str = event.message_str.strip() # 去除首尾空格，避免匹配问题
+        user_id = event.get_sender_id()
+        message_str = event.message_str.strip()
         message_chain = event.get_messages()
         logger.info(message_chain)
 
-        # 1. 暂停指令判断：匹配/jm 暂停（忽略空格）
         if re.match(r'^jm\s*暂停$', message_str, re.IGNORECASE):
-            JM_PAUSE_FLAG[user_id] = True  # 设置当前用户暂停标识为True
-            # 清除该用户下载目录并提示
+            JM_PAUSE_FLAG[user_id] = True
             user_download_dir = get_user_download_dir(user_id)
             clear_folder(user_download_dir)
             yield event.plain_result(f"{user_name}，已暂停漫画发送并清除服务器下载文件！")
-            return  # 直接返回，终止后续逻辑
+            return
 
-        # 2. 非暂停指令：重置当前用户的暂停标识为False（开始新的下载/发送）
         JM_PAUSE_FLAG[user_id] = False
-        yield event.plain_result(f"{user_name}, 正在查找 {message_str}!")
-        message_str = extract_integers(message_str)
         
+        # --- 修改开始：参考上次建议 ---
+        original_message_for_display = message_str # 保存原始字符串用于显示
+        album_ids_from_input = extract_integers(message_str) # 提取ID列表
+
+        if not album_ids_from_input:
+            yield event.plain_result(f"{user_name}, 未找到有效的数字ID，请检查输入。例如：/jm 123456")
+            return # 如果没有找到ID，直接返回
+        
+        album_id_to_search = album_ids_from_input[0] # 取第一个ID用于下载和后续查询
+        # --- 修改结束 ---
+
+        yield event.plain_result(f"{user_name}, 正在查找 [{album_id_to_search}] !") # 显示要下载的ID
+
         # 为每个用户创建独立的下载目录
         user_download_dir = get_user_download_dir(user_id)
-        # 先清空目录，避免残留旧文件
         clear_folder(user_download_dir)
         try:
             temp_option_file = create_temp_option(
@@ -202,10 +209,11 @@ class MyPlugin(Star):
             )
             
             option = jmcomic.create_option_by_file(temp_option_file)
-            jmcomic.download_album(message_str, option)
-            images = find_images_os(user_download_dir)
+            # --- 修改：使用提取到的ID ---
+            jmcomic.download_album(album_id_to_search, option) 
             
-            # 检查是否在下载后被暂停
+            images = find_images_os(user_download_dir)
+
             if JM_PAUSE_FLAG.get(user_id, False):
                 clear_folder(user_download_dir)
                 yield event.plain_result(f"{user_name}，已触发暂停，取消图片发送并清除文件！")
@@ -213,46 +221,55 @@ class MyPlugin(Star):
             
             yield event.plain_result(f"共找到 {len(images)} 张图片，按顺序发送：")
             
-            # 3. 图片发送循环：每次发送前检查暂停标识
             for i, img in enumerate(images, 1):
-                # 暂停标识为True时，立即终止循环
                 if JM_PAUSE_FLAG.get(user_id, False):
                     yield event.plain_result(f"{user_name}，已暂停图片发送，剩余{len(images)-i+1}张未发送！")
                     break
-                yield event.image_result(img)  # 发送图片
+                yield event.image_result(img)
                 await asyncio.sleep(1)
-
 
             if JM_PAUSE_FLAG.get(user_id, False):
                 yield event.plain_result(f"{user_name}，未保存到komaga")
             else:
-                # client = JmOption.default().new_jm_client()
-                subdir = os.listdir(user_download_dir)[0]  # 假设只有一个下载的漫画文件夹
+                # 现在 album_id_to_search 已经在函数作用域内定义了
+                subdir = os.listdir(user_download_dir)[0]
                 for subdir in os.listdir(user_download_dir):
                     folder_path = os.path.join(user_download_dir, subdir)
                     if os.path.isdir(folder_path):
                         title = subdir 
-             # 使用文件夹名称作为漫画标题
-                # page = client.search_site(search_query=str(message_str))
-                # album: JmAlbumDetail = page.single_album
+
                 yield event.plain_result(f"{user_name}，正在保存,{title}")
-                process_comics(user_download_dir,'None','None')
+                
+                client = JmOption.default().new_jm_client()
+                # --- 使用定义好的 album_id_to_search ---
+                page = client.search_site(search_query=album_id_to_search) 
+                album: JmAlbumDetail = page.single_album 
+                
+                if album is None:
+                    # 现在这一行不会报 NameError 了
+                    yield event.plain_result(f"{user_name}, 未能找到ID为 [{album_id_to_search}] 的本子。")
+                    return # 添加return，否则会继续执行下面的代码
+
+                # 注意：这里获取到的 tags 是一个列表，而 process_comics 期望的是一个列表
+                # 但您传入的是 join 后的字符串。需要调整。
+                album_tags_list = album.tags if album.tags else ['No Tags Found']
+                album_author_str = album.author if album.author else 'Unknown Author'
+
+                yield event.plain_result(f"{user_name}，正在保存,{title}")
+                # --- 传入标签列表和作者字符串 ---
+                process_comics(user_download_dir, album_tags_list, album_author_str) # 传入列表
 
                 yield event.plain_result(f"{user_name}，已保存到komaga")
         except Exception as e:
             logger.error(f"用户{user_id}执行jm命令出错：{str(e)}")
             yield event.plain_result(f"{user_name}，操作出错：{str(e)}")
-
         finally:
-            
-            # 4. 最终清理：无论是否暂停，结束后清空下载目录
             clear_folder(user_download_dir)
-            # 重置暂停标识，避免影响下次操作
             if user_id in JM_PAUSE_FLAG:
                 del JM_PAUSE_FLAG[user_id]
 
     @filter.command("jms")
-    async def helloworld2(self, event: AstrMessageEvent):
+    async def jms(self, event: AstrMessageEvent):
         user_name = event.get_sender_name()
         message_str = event.message_str
         logger.info(f"Received command from {user_name}: {message_str}")
@@ -265,7 +282,137 @@ class MyPlugin(Star):
         for album_id, title in page:
             result += f'[{album_id}]: {title}\n'
         yield event.plain_result(result)
+
+    # --- 新增：月排行榜 ---
+    @filter.command("jmmr")
+    async def jm_monthly_ranking(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        message_str = event.message_str
+        logger.info(f"Received monthly ranking request from {user_name}: {message_str}")
+        
+        # 尝试从消息中提取页码，默认为1
+        page_num_list = extract_numbers(message_str)
+        page_num = int(page_num_list[0]) if page_num_list and page_num_list[0] > 0 else 1
+
+        yield event.plain_result(f"{user_name}，正在获取月度排行榜第 {page_num} 页...")
+
+        try:
+            client = JmOption.default().new_jm_client()
+            # 调用月排行榜API
+            page: JmCategoryPage = client.month_ranking(page=page_num)
             
+            if not page:
+                 yield event.plain_result(f"{user_name}，未能获取到第 {page_num} 页的排行榜数据。")
+                 return
+
+            result = f"月度排行榜 第 {page_num} 页:\n"
+            for album_id, title in page:
+                result += f'[{album_id}]: {title}\n'
+            
+            yield event.plain_result(result.strip())
+
+        except Exception as e:
+            logger.error(f"用户{event.get_sender_id()}执行jmmr命令出错：{str(e)}")
+            yield event.plain_result(f"{user_name}，获取月度排行榜时发生错误: {str(e)}")
+    # --- 新增结束 ---
+
+    # --- 新增：周排行榜 ---
+    @filter.command("jmwr")
+    async def jm_weekly_ranking(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        message_str = event.message_str
+        logger.info(f"Received weekly ranking request from {user_name}: {message_str}")
+        
+        # 尝试从消息中提取页码，默认为1
+        page_num_list = extract_numbers(message_str)
+        page_num = int(page_num_list[0]) if page_num_list and page_num_list[0] > 0 else 1
+
+        yield event.plain_result(f"{user_name}，正在获取周度排行榜第 {page_num} 页...")
+
+        try:
+            client = JmOption.default().new_jm_client()
+            # 调用周排行榜API
+            page: JmCategoryPage = client.week_ranking(page=page_num)
+            
+            if not page:
+                 yield event.plain_result(f"{user_name}，未能获取到第 {page_num} 页的排行榜数据。")
+                 return
+
+            result = f"周度排行榜 第 {page_num} 页:\n"
+            for album_id, title in page:
+                result += f'[{album_id}]: {title}\n'
+            
+            yield event.plain_result(result.strip())
+
+        except Exception as e:
+            logger.error(f"用户{event.get_sender_id()}执行jmwr命令出错：{str(e)}")
+            yield event.plain_result(f"{user_name}，获取周度排行榜时发生错误: {str(e)}")
+    # --- 新增结束 ---
+
+    # --- 新增：帮助命令 ---
+    @filter.command("jmhelp")
+    async def jm_help(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        help_text = f"""
+{user_name}，欢迎使用禁漫天堂插件！
+以下是可用的命令列表：
+
+/jm <ID>          - 下载指定ID的漫画，并发送图片。
+/jm 暂停          - 暂停当前正在进行的漫画下载和发送，并清理缓存。
+/jms <关键词> [页码] - 搜索指定关键词的漫画，默认第1页。
+/jmtag <ID>       - 查询指定ID漫画的标签。
+/jmmr [页码]      - 获取月度热门排行榜，默认第1页。
+/jmwr [页码]      - 获取周度热门排行榜，默认第1页。
+/jmhelp           - 显示此帮助信息。
+
+注意：[] 表示可选参数。
+        """.strip()
+        yield event.plain_result(help_text)
+    # --- 新增结束 ---
+
+    @filter.command("jmtag")
+    async def jmtag(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        original_message_str = event.message_str # 保存原始消息字符串
+        logger.info(f"Received command from {user_name}: {original_message_str}")
+        
+        # 提取数字，假设第一个数字就是要查询的album ID
+        album_ids = extract_integers(original_message_str)
+        
+        if not album_ids:
+            yield event.plain_result(f"{user_name}, 未找到有效的数字ID，请检查输入。例如：/jmtag 123456")
+            return
+            
+        album_id_to_search = album_ids[0] # 取第一个找到的数字作为ID
+        
+        # 不再修改原始message_str用于显示
+        yield event.plain_result(f"{user_name}, 查询本子 [{album_id_to_search}] 的标签!")
+
+        try:
+            client = JmOption.default().new_jm_client()
+            # 直接使用提取到的数字ID进行搜索
+            page = client.search_site(search_query=str(album_id_to_search)) # 确保传入字符串
+            # 使用正确的属性名 .single_album
+            album: JmAlbumDetail = page.single_album 
+
+            # 检查是否成功获取到album对象 (虽然按理说查ID应该能找到，但以防万一)
+            if album is None:
+                yield event.plain_result(f"{user_name}, 未能找到ID为 [{album_id_to_search}] 的本子。")
+                return
+
+            tags_str = ', '.join(album.tags) if album.tags else '无标签' # 将标签列表转为字符串
+            yield event.plain_result(f"[{album_id_to_search}]:\n{album.title}\n标签: {tags_str}") # 显示ID, 标题和标签
+            
+        except AttributeError as e:
+            if "'JmSearchPage' object has no attribute 'single_album'" in str(e):
+                # 这种情况理论上不应该发生在查ID时，除非ID无效
+                yield event.plain_result(f"{user_name}, 搜索结果不唯一或无效，无法获取详情。")
+            else:
+                logger.error(f"AttributeError in jmtag: {e}")
+                yield event.plain_result(f"{user_name}, 获取标签时发生错误 (AttributeError): {e}")
+        except Exception as e:
+            logger.error(f"用户{event.get_sender_id()}执行jmtag命令出错：{str(e)}")
+            yield event.plain_result(f"{user_name}, 获取标签时发生错误: {str(e)}")   
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
         # 插件销毁时清空所有暂停标识
