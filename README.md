@@ -175,6 +175,9 @@ astrbot/
 
 ---
 
+## 访问统计
+![访问统计](https://count.getloli.com/@iamfromchangsha?name=iamfromchangsha&theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
+
 ## 🌟 Enjoy your reading!
 
 请合法合规使用本插件。
