@@ -174,7 +174,9 @@ astrbot/
 - `Python >= 3.8`
 
 ---
+## Star History
 
+[![Star History Chart](https://api.star-history.com/svg?repos=iamfromchangsha/astrbot_plugin_JMCOMIC&type=date&legend=top-left)](https://www.star-history.com/#iamfromchangsha/astrbot_plugin_JMCOMIC&type=date&legend=top-left)
 ## 访问统计
 ![访问统计](https://count.getloli.com/@iamfromchangsha?name=iamfromchangsha&theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
 
