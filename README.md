@@ -1,185 +1,65 @@
-# jmcomic 插件说明文档
+# astrbot_plugin_JMCOMIC
 
-> 适用于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的禁漫天堂（JMComic）插件，支持通过指令搜索、下载漫画、查看排行榜和标签。
+> 适用于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) **4.x** 的禁漫天堂（JMComic）插件。
+> 本分支 `feature/astrbot4-rewrite` 为面向 AstrBot 4.x 的移植重构版，在原版基础上加入了大量增强特性。
 
+## ✨ 本分支新增 / 增强
 
-## ✨ 功能特性
+- **AstrBot 4.x API 完整移植**：基于 `star.Star` / `star.Context` / `filter.command` 新接口重写。
+- **自动剔除韩漫与合集**：三层韩漫识别（标签 / 谚文字符 / 连载状态）+ 多章节合集检测，搜索、推荐、排行、相似结果全部过滤。
+- **逐张压缩发送**：下载过程中每张图片即时压缩（JPEG q80 / 最长边 1200px），节省流量、防止内存与磁盘溢出。
+- **`/jmrec <本子ID>` 相似推荐**：分析目标本子的题材标签，按多标签命中度排序推荐同类型作品。
+- **`/jmauthor <本子ID>` 作者作品**：输入任意本子编号，返回该作者的全部作品列表。
+- **下载容错加固**：部分图片下载失败时自动补下重试一轮（利用 cache 机制只补失败图）；仍失败则跳过继续，不再整体中断。
+- **资源安全护栏**：合集章节数 / 总页数 / 磁盘剩余 / 内存水位 / 图片总体积 / PDF 体积 / 下载与合成超时多重护栏，超限直接拒绝或暂停，防止低配服务器被拖垮。
 
-- **`/jm <漫画ID>`**：根据漫画 ID 下载整本漫画并逐张发送图片。
-- **`/jms <关键词> [页码]`**：根据关键词搜索漫画，支持指定页码，默认为第 1 页。
-- **`/jm 暂停`**：在下载或发送过程中，暂停当前任务并清除服务器上的临时文件。
-- **`/jmtag <漫画ID>`**：查询指定漫画 ID 的详细标签信息。
-- **`/jmmr [页码]`**：获取月度热门排行榜，默认第 1 页。
-- **`/jmwr [页码]`**：获取周度热门排行榜，默认第 1 页。
-- **`/jmhelp`**：显示插件的帮助信息。
+## 📋 命令一览
 
+| 命令 | 说明 |
+|------|------|
+| `/jm <漫画ID>` | 下载整本漫画并逐张发送图片（下载中逐张压缩） |
+| `/jm 暂停` | 暂停当前下载/发送任务并清理临时文件 |
+| `/jmpdf <漫画ID>` | 下载漫画并合成 PDF 以文件形式发送 |
+| `/jms <关键词> [页码]` | 关键词搜索漫画（自动过滤韩漫与合集） |
+| `/jmrec [分类] [页码]` | 分类热门推荐（按观看数排序） |
+| `/jmrec <本子ID>` | 🎯 相似推荐：分析题材，推荐同类型本子 |
+| `/jmday` | 日 / 周 / 月三榜热门排行 |
+| `/jmmr [页码]` | 月榜热门排行 |
+| `/jmwr [页码]` | 周榜热门排行 |
+| `/jmtag <漫画ID>` | 查询指定漫画的标签信息 |
+| `/jmauthor <漫画ID>` | 👤 查询该作者的全部作品 |
+| `/jmhelp` | 查看帮助 |
 
-## 📦 安装
+## 🔧 安装
 
-1. 确保已安装 [AstrBot](https://github.com/AstrBotDevs/AstrBot)。
-2. 将本插件文件夹放入 AstrBot 的 `plugins` 目录中。
-3. 安装依赖：
-   ```bash
-   pip install jmcomic pyyaml
-   ```
-4. 在插件目录下创建配置文件：
-   - `./data/plugins/astrbot_plugin_jmcomic/option.yml`
+将本仓库克隆到 AstrBot 的 `data/plugins/` 目录下（或通过 WebUI 填写插件仓库地址安装）：
 
-   示例 `option.yml` 内容（请根据你的需求修改，特别是 `base_dir`，但插件会动态覆盖它以实现用户隔离）：
-   ```yaml
-   dir_rule:
-     base_dir: ./data/plugins/astrbot_plugin_jmcomic/download # 插件会忽略此项，使用用户专属目录
-     album_dir_rule: '{id}'
-   download:
-     image_suffix: ''
-     way: sequential
-   cache:
-     album_count: 5
-   ```
-
----
-
-## 🧩 使用说明
-
-### 1. 下载漫画 `/jm`
-
-- **指令格式**：
-  ```
-  /jm <漫画ID>
-  ```
-  或
-  ```
-  /jm 暂停
-  ```
-- **示例**：
-  ```
-  /jm 456789
-  ```
-- **行为**：
-  - 插件会从消息中提取第一个整数作为漫画 ID。
-  - 自动为用户创建独立的临时下载目录并下载漫画。
-  - 按文件名中的数字顺序发送所有图片（每张间隔 1 秒）。
-  - 发送完成后，会尝试将漫画打包成 CBZ 文件并保存到 `/opt/AstrBot/data/plugins_data/jmcomic/` 目录下（此路径硬编码在 `process_comics` 函数中）。
-  - 无论成功与否，最后都会自动清空用户的临时下载目录。
-  - 输入 `/jm 暂停` 可以中断当前的下载或发送流程。
-
-### 2. 搜索漫画 `/jms`
-
-- **指令格式**：
-  ```
-  /jms <关键词> [页码]
-  ```
-- **示例**：
-  ```
-  /jms 全彩 2
-  ```
-- **行为**：
-  - 从消息中提取最后一个数字作为页码（若无则默认为 1）。
-  - 剩余文本作为搜索关键词。
-  - 返回该页的漫画列表，格式为 `[ID]: 标题`。
-
-### 3. 查看标签 `/jmtag`
-
-- **指令格式**：
-  ```
-  /jmtag <漫画ID>
-  ```
-- **示例**：
-  ```
-  /jmtag 456789
-  ```
-- **行为**：
-  - 根据提供的漫画 ID 查询其标题和标签信息，并返回结果。
-
-### 4. 月度排行榜 `/jmmr`
-
-- **指令格式**：
-  ```
-  /jmmr [页码]
-  ```
-- **示例**：
-  ```
-  /jmmr 3
-  ```
-- **行为**：
-  - 获取禁漫天堂的月度热门排行榜。
-  - 支持指定页码，默认为第 1 页。
-  - 返回该页的漫画列表，格式为 `[ID]: 标题`。
-
-### 5. 周度排行榜 `/jmwr`
-
-- **指令格式**：
-  ```
-  /jmwr [页码]
-  ```
-- **示例**：
-  ```
-  /jmwr 2
-  ```
-- **行为**：
-  - 获取禁漫天堂的周度热门排行榜。
-  - 支持指定页码，默认为第 1 页。
-  - 返回该页的漫画列表，格式为 `[ID]: 标题`。
-
-### 6. 帮助信息 `/jmhelp`
-
-- **指令格式**：
-  ```
-  /jmhelp
-  ```
-- **行为**：
-  - 显示所有可用命令及其简要说明。
-
----
-
-## 📁 目录结构
-
-插件运行时依赖以下目录结构：
+```bash
+cd AstrBot/data/plugins
+git clone -b feature/astrbot4-rewrite https://github.com/iamfromchangsha/astrbot_plugin_JMCOMIC.git astrbot_plugin_JMCOMIC
 ```
-astrbot/
-├── data/
-│   └── plugins/
-│       └── astrbot_plugin_jmcomic/
-│           ├── option.yml          # jmcomic 配置文件
-│           └── download/           # 主下载目录
-│               └── /      # 每个用户的独立临时下载目录（自动创建/清空）
-└── /opt/AstrBot/data/plugins_data/jmcomic/ # CBZ文件最终保存位置（硬编码）
-```
-确保 `download` 目录及 `/opt/AstrBot/data/plugins_data/jmcomic/` 目录有读写权限。
 
----
+依赖（jmcomic / Pillow / img2pdf 等）会在 AstrBot 载入插件时自动安装。
 
-## 🔒 注意事项
+## ⚙️ 配置
 
-- 本插件调用 `jmcomic` 库，需自行处理账号、Cookie 等认证信息（在 `option.yml` 中配置）。
-- 请遵守当地法律法规，合理使用本插件。
-- 频繁请求可能导致 IP 被封，请勿滥用搜索或下载功能。
-- **重要**：最终的 CBZ 文件是硬编码保存到 `/opt/AstrBot/data/plugins_data/jmcomic/` 的，如果您的 AstrBot 安装路径不同，请修改代码中的 `make_cbz` 函数内的路径。
+`option.yml` 为 jmcomic 的下载配置，其中 `dir_rule.base_dir` 指定下载缓存目录；插件会在每次下载时基于它生成临时配置（并发 photo=1 / image=2，按需覆盖）。如需账号登录（部分漫画需要），在 `plugins.after_init` 的 `login` 段填写 jmcomic 账号。
 
----
+插件数据目录默认为 `./data/plugins/astrbot_plugin_JMCOMIC`，用户下载缓存位于其下 `download/<user_id>/`，每次任务开始前自动清空。
 
-## 🛠 开发者信息
+## 🛡️ 安全护栏默认值
 
-- **插件名称**：jm
-- **作者**：iamfromchangsha
-- **版本**：1.1.0
+| 护栏项 | 阈值 |
+|--------|------|
+| 合集章节数上限 | 5 章 |
+| 总页数上限 | 200 页 |
+| 磁盘剩余下限 | 50 MB（下载前检查 + 下载中监控） |
+| 内存可用下限 | 60 MB |
+| 图片总体积上限 | 120 MB |
+| PDF 体积上限 | 100 MB |
+| 下载超时 | 900 秒 |
+| PDF 合成超时 | 600 秒 |
 
----
+## 📄 License
 
-## 📜 依赖
-
-- `astrbot >= v4.0`
-- `jmcomic >= 2.0`
-- `pyyaml`
-- `Python >= 3.8`
-
----
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=iamfromchangsha/astrbot_plugin_JMCOMIC&type=date&legend=top-left)](https://www.star-history.com/#iamfromchangsha/astrbot_plugin_JMCOMIC&type=date&legend=top-left)
-## 访问统计
-![访问统计](https://count.getloli.com/@iamfromchangsha?name=iamfromchangsha&theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)
-
-## 🌟 Enjoy your reading!
-
-请合法合规使用本插件。
+GPL-2.0（见 LICENSE）
